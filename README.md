@@ -185,7 +185,7 @@ output_directory/
 ```json
 {
   "camera_trajectories": {
-    "my_custom_trajectory": {
+    "sphere_spiral_custom": {
       "type": "sphere_spiral",
       "radius": 5.0,
       "start_elevation": 45,
