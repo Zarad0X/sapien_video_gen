@@ -17,8 +17,8 @@
 ### 核心依赖
 
 ```bash
-# SAPIEN 3D 仿真器 (推荐最新版本)
-pip install sapien>=3.0.0b1
+# SAPIEN 3D 仿真器 
+pip install sapien==2.2
 
 # 必需的 Python 库
 pip install numpy opencv-python pillow
