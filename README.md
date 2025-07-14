@@ -213,23 +213,8 @@ custom_animations = {
 renderer.set_joint_animations(custom_animations)
 ```
 
-## 🎯 实际应用场景
 
-### 🏠 家具动画
-```bash
-python quick_start.py animated furniture.urdf \
-  --trajectory sphere_spiral_custom \
-  --animation sequential \
-  --animation-config standard
-```
 
-### 🚗 机械部件展示
-```bash
-python quick_start.py advanced mechanism.urdf \
-  --config ultra_high \
-  --trajectory circular_close \
-  --lighting dramatic
-```
 
 ### 📚 数据集批量处理
 ```python
