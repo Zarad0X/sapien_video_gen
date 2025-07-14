@@ -64,6 +64,24 @@
       "height_range": [0.5, 2.0],
       "frames": 180,
       "description": "从近到远的螺旋轨迹"
+    },
+    "sphere_spiral_top_down": {
+      "type": "sphere_spiral",
+      "radius": 5.0,
+      "start_elevation": 85,
+      "end_elevation": -85,
+      "rotations": 3,
+      "frames": 180,
+      "description": "球面螺旋轨迹，从顶部到底部，可指定转圈数"
+    },
+    "sphere_spiral_custom": {
+      "type": "sphere_spiral",
+      "radius": 8.0,
+      "start_elevation": 60,
+      "end_elevation": -60,
+      "rotations": 5,
+      "frames": 180,
+      "description": "自定义球面螺旋轨迹，可调整起点终点和圈数"
     }
   },
   

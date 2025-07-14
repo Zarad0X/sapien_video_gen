@@ -212,6 +212,84 @@ class PartNetVideoRenderer:
             poses.append(pose)
             
         return poses
+    
+    def generate_sphere_spiral_trajectory(self, center: np.ndarray, radius: float,
+                                         start_elevation: float, end_elevation: float,
+                                         rotations: float, n_frames: int) -> List[sapien.Pose]:
+        """
+        Generate spherical spiral camera trajectory that moves from top to bottom (or vice versa)
+        while rotating around the center, with camera always looking at the center.
+        
+        Args:
+            center: Center point to orbit around
+            radius: Sphere radius (distance from center)
+            start_elevation: Starting elevation angle in degrees (-90 to 90, where 90 is top, -90 is bottom)
+            end_elevation: Ending elevation angle in degrees
+            rotations: Number of complete rotations around the sphere
+            n_frames: Number of frames
+            
+        Returns:
+            List of camera poses
+        """
+        poses = []
+        
+        # Convert elevation angles from degrees to radians
+        start_elev_rad = np.radians(start_elevation)
+        end_elev_rad = np.radians(end_elevation)
+        
+        for i in range(n_frames):
+            t = i / (n_frames - 1) if n_frames > 1 else 0  # 0 to 1
+            
+            # Interpolate elevation angle
+            elevation = start_elev_rad + t * (end_elev_rad - start_elev_rad)
+            
+            # Calculate azimuth angle (horizontal rotation)
+            azimuth = t * rotations * 2 * np.pi
+            
+            # Convert spherical coordinates to Cartesian
+            # elevation: angle from horizontal plane (0 = horizontal, π/2 = up, -π/2 = down)
+            # azimuth: angle around vertical axis
+            x = radius * np.cos(elevation) * np.cos(azimuth)
+            y = radius * np.cos(elevation) * np.sin(azimuth)
+            z = radius * np.sin(elevation)
+            
+            cam_pos = center + np.array([x, y, z])
+            
+            # Camera always looks at center
+            forward = center - cam_pos
+            forward = forward / np.linalg.norm(forward)
+            
+            # Calculate up vector (tangent to sphere surface, pointing generally upward)
+            # For a sphere, the up vector is perpendicular to the radial direction
+            radial = cam_pos - center
+            radial = radial / np.linalg.norm(radial)
+            
+            # Use world up as reference
+            world_up = np.array([0, 0, 1])
+            
+            # Calculate right vector
+            right = np.cross(forward, world_up)
+            if np.linalg.norm(right) < 1e-6:  # Handle singularity when looking straight up/down
+                # Use a different reference vector
+                right = np.cross(forward, np.array([1, 0, 0]))
+            right = right / np.linalg.norm(right)
+            
+            # Recompute up vector to ensure orthogonality
+            up = np.cross(right, forward)
+            up = up / np.linalg.norm(up)
+            
+            # Create rotation matrix (SAPIEN camera convention: X=forward, Y=left, Z=up)
+            rotation_matrix = np.column_stack([forward, -right, up])
+            
+            # Create transformation matrix
+            transform = np.eye(4)
+            transform[:3, :3] = rotation_matrix
+            transform[:3, 3] = cam_pos
+            
+            pose = sapien.Pose.from_transformation_matrix(transform)
+            poses.append(pose)
+            
+        return poses
         
     def capture_frame(self) -> Tuple[np.ndarray, np.ndarray, dict]:
         """
@@ -389,6 +467,16 @@ def main():
         #     center=center,
         #     radius_range=(1.0, 3.0),
         #     height_range=(0.5, 2.5), 
+        #     n_frames=n_frames
+        # )
+        
+        # Alternative: spherical spiral trajectory
+        # poses = renderer.generate_sphere_spiral_trajectory(
+        #     center=center,
+        #     radius=2.0,
+        #     start_elevation=90,
+        #     end_elevation=-90,
+        #     rotations=2,
         #     n_frames=n_frames
         # )
         

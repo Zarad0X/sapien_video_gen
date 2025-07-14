@@ -221,8 +221,8 @@ Examples:
                                 help='Render configuration (default: standard)')
     animated_parser.add_argument('--trajectory', '-t', default='circular_medium',
                                 help='Camera trajectory (default: circular_medium)')
-    animated_parser.add_argument('--lighting', '-l', default='standard',
-                                help='Lighting setup (default: standard)')
+    animated_parser.add_argument('--lighting', '-l', default='high_quality',
+                                help='Lighting setup (default: high_quality)')
     animated_parser.add_argument('--animation', '-a', default='periodic',
                                 help='Animation type (periodic, oscillating, sequential, large_motion)')
     animated_parser.add_argument('--animation-config', '--anim-config', default='standard',

@@ -181,6 +181,15 @@ class ConfigurableRenderer:
                 height_range=traj_config["height_range"],
                 n_frames=traj_config["frames"]
             )
+        elif traj_config["type"] == "sphere_spiral":
+            return self.renderer.generate_sphere_spiral_trajectory(
+                center=center,
+                radius=traj_config["radius"],
+                start_elevation=traj_config["start_elevation"],
+                end_elevation=traj_config["end_elevation"],
+                rotations=traj_config["rotations"],
+                n_frames=traj_config["frames"]
+            )
         else:
             raise ValueError(f"Unknown trajectory type: {traj_config['type']}")
     
@@ -468,6 +477,15 @@ class ConfigurableRenderer:
                 center=center,
                 radius_range=traj_config["radius_range"],
                 height_range=traj_config["height_range"],
+                n_frames=traj_config["frames"]
+            )
+        elif traj_config["type"] == "sphere_spiral":
+            return renderer.generate_sphere_spiral_trajectory(
+                center=center,
+                radius=traj_config["radius"],
+                start_elevation=traj_config["start_elevation"],
+                end_elevation=traj_config["end_elevation"],
+                rotations=traj_config["rotations"],
                 n_frames=traj_config["frames"]
             )
         else:
