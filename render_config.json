@@ -1,0 +1,166 @@
+{
+  "render_configs": {
+    "low_quality": {
+      "width": 320,
+      "height": 240,
+      "fps": 15,
+      "description": "快速预览，低质量"
+    },
+    "standard": {
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "description": "标准质量，适合大多数用途"
+    },
+    "high_quality": {
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "description": "高质量，适合展示"
+    },
+    "ultra_high": {
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "description": "超高质量，适合论文和发布"
+    }
+  },
+  
+  "camera_trajectories": {
+    "circular_close": {
+      "type": "circular",
+      "radius": 3.0,
+      "height": 1.0,
+      "frames": 90,
+      "full_rotation": true,
+      "description": "近距离圆形轨迹"
+    },
+    "circular_medium": {
+      "type": "circular", 
+      "radius": 10,
+      "height": 5.0,
+      "frames": 120,
+      "full_rotation": true,
+      "description": "中等距离圆形轨迹"
+    },
+    "circular_far": {
+      "type": "circular",
+      "radius": 30.0,
+      "height": 10.0,
+      "frames": 150,
+      "full_rotation": true,
+      "description": "远距离圆形轨迹"
+    },
+    "spiral_inward": {
+      "type": "spiral",
+      "radius_range": [12.0, 8.0],
+      "height_range": [6.0, 3.0],
+      "frames": 180,
+      "description": "从远到近的螺旋轨迹"
+    },
+    "spiral_outward": {
+      "type": "spiral",
+      "radius_range": [1.0, 3.5],
+      "height_range": [0.5, 2.0],
+      "frames": 180,
+      "description": "从近到远的螺旋轨迹"
+    }
+  },
+  
+  "lighting_setups": {
+    "standard": {
+      "ambient": [0.3, 0.3, 0.3],
+      "directional": {
+        "direction": [0, 1, -1],
+        "color": [0.5, 0.5, 0.5],
+        "shadow": true
+      },
+      "point_lights": [
+        {"position": [2, 2, 2], "color": [1, 1, 1], "shadow": true},
+        {"position": [2, -2, 2], "color": [1, 1, 1], "shadow": true},
+        {"position": [-2, 0, 2], "color": [1, 1, 1], "shadow": true}
+      ]
+    },
+    "soft": {
+      "ambient": [0.4, 0.4, 0.4],
+      "directional": {
+        "direction": [0, 1, -1],
+        "color": [0.3, 0.3, 0.3],
+        "shadow": false
+      },
+      "point_lights": [
+        {"position": [1, 1, 2], "color": [0.8, 0.8, 0.8], "shadow": false},
+        {"position": [-1, -1, 2], "color": [0.8, 0.8, 0.8], "shadow": false}
+      ]
+    },
+    "dramatic": {
+      "ambient": [0.1, 0.1, 0.1],
+      "directional": {
+        "direction": [1, 0, -1],
+        "color": [1.0, 1.0, 1.0],
+        "shadow": true
+      },
+      "point_lights": [
+        {"position": [3, 0, 3], "color": [1.2, 1.2, 1.2], "shadow": true}
+      ]
+    }
+  },
+  
+  "animation_configs": {
+    "gentle": {
+      "amplitude_ratio": 0.3,
+      "frequency": 0.5,
+      "default_range_revolute": 0.52,
+      "default_range_prismatic": 0.05,
+      "description": "温和的关节动画，小幅度慢速运动"
+    },
+    "standard": {
+      "amplitude_ratio": 0.6,
+      "frequency": 1.0,
+      "default_range_revolute": 0.79,
+      "default_range_prismatic": 0.1,
+      "description": "标准关节动画，中等幅度和速度"
+    },
+    "energetic": {
+      "amplitude_ratio": 0.85,
+      "frequency": 1.5,
+      "default_range_revolute": 1.05,
+      "default_range_prismatic": 0.15,
+      "description": "充满活力的动画，大幅度快速运动"
+    },
+    "extreme": {
+      "amplitude_ratio": 0.95,
+      "frequency": 1.0,
+      "default_range_revolute": 1.57,
+      "default_range_prismatic": 0.2,
+      "description": "极限动画，最大幅度运动"
+    }
+  },
+  
+  "animation_types": {
+    "periodic": {
+      "cycles": 1.5,
+      "description": "周期性运动，关节在范围内来回摆动"
+    },
+    "oscillating": {
+      "cycles": 2.0,
+      "description": "振荡运动，基于正弦波的平滑运动"
+    },
+    "sequential": {
+      "phase_offset": 0.25,
+      "active_ratio": 0.6,
+      "description": "顺序动画，不同关节在不同时间段运动"
+    },
+    "large_motion": {
+      "cycles": 1.0,
+      "description": "大幅度运动，使用关节的完整范围"
+    }
+  },
+  
+  "object_centers": {
+    "furniture": [0, 0, 0.5],
+    "small_objects": [0, 0, 0.2],
+    "large_objects": [0, 0, 1.0],
+    "default": [0, 0, 0.5]
+  }
+}
