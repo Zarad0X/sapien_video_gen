@@ -109,9 +109,9 @@ python quick_start.py advanced mobility.urdf \
 
 # 动画渲染with关节运动
 python quick_start.py animated mobility.urdf \
-  --config ultra_high \
-  --trajectory circular_medium \
-  --animation oscillating \
+  --config high_quality \
+  --trajectory sphere_spiral_custom \
+  --animation periodic \
   --animation-config energetic
 ```
 
