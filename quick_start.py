@@ -82,9 +82,20 @@ def simple_render(urdf_path: str, output_dir: str = "quick_render"):
         
         # Create videos
         renderer.create_videos(output_dir)
+        
+        # Create enhanced depth visualizations
+        print("Creating enhanced depth visualizations...")
+        renderer.create_enhanced_depth_videos(output_dir)
+        renderer.save_depth_analysis(output_dir)
+        
         print(" Videos created")
+        print("Enhanced depth videos created (jet, plasma, viridis colormaps)")
         
         print(f" Rendering complete! Check output in: {output_dir}")
+        print("Files include:")
+        print("  - Standard RGB and depth videos")
+        print("  - Enhanced depth videos with color (depth_jet.mp4, etc.)")
+        print("  - Depth analysis plots and statistics")
         return True
         
     except Exception as e:

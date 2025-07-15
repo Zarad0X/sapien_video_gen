@@ -365,7 +365,8 @@ class AnimatedRenderer(PartNetVideoRenderer):
         if save_frames:
             os.makedirs(output_dir, exist_ok=True)
             os.makedirs(f"{output_dir}/rgb", exist_ok=True)
-            os.makedirs(f"{output_dir}/depth", exist_ok=True)
+            os.makedirs(f"{output_dir}/depth_vis", exist_ok=True)  # 深度可视化
+            os.makedirs(f"{output_dir}/depth", exist_ok=True)  # 原始深度数据
             
         self.rgb_frames = []
         self.depth_frames = []
@@ -373,7 +374,7 @@ class AnimatedRenderer(PartNetVideoRenderer):
         joint_states = []
         
         print(f"渲染 {len(camera_poses)} 帧动画...")
-        
+
         for i, pose in enumerate(camera_poses):
             # 计算时间进度
             t = i / (len(camera_poses) - 1) if len(camera_poses) > 1 else 0.0
@@ -409,25 +410,56 @@ class AnimatedRenderer(PartNetVideoRenderer):
                 # 保存RGB
                 from PIL import Image
                 rgb_pil = Image.fromarray(rgb)
-                rgb_pil.save(f"{output_dir}/rgb/frame_{i:06d}.png")
+                rgb_pil.save(f"{output_dir}/rgb/{i:05d}.png")
                 
-                # 保存深度
-                depth_normalized = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
-                depth_img = (depth_normalized * 255).astype(np.uint8)
+                # 保存深度可视化 - 使用彩色可视化，排除0值
+                import matplotlib.pyplot as plt
+                import matplotlib.cm as cm
+                
+                # 排除0值进行归一化
+                valid_depth = depth[depth > 0]
+                if len(valid_depth) > 0:
+                    depth_min = valid_depth.min()
+                    depth_max = valid_depth.max()
+                    
+                    # 归一化深度图，0值保持为0
+                    depth_normalized = np.zeros_like(depth)
+                    mask = depth > 0
+                    depth_normalized[mask] = (depth[mask] - depth_min) / (depth_max - depth_min + 1e-8)
+                    
+                    # 使用viridis或jet颜色映射创建彩色深度图
+                    colormap = cm.viridis  # 或者使用 cm.jet, cm.plasma, cm.inferno
+                    depth_colored = colormap(depth_normalized)
+                    
+                    # 将0值区域设为黑色
+                    depth_colored[~mask] = [0, 0, 0, 1]  # 黑色
+                    
+                    # 转换为8位RGB图像
+                    depth_img = (depth_colored[:, :, :3] * 255).astype(np.uint8)
+                else:
+                    # 如果没有有效深度值，创建全黑图像
+                    depth_img = np.zeros((depth.shape[0], depth.shape[1], 3), dtype=np.uint8)
+                
+                # 保存深度可视化图像
                 depth_pil = Image.fromarray(depth_img)
-                depth_pil.save(f"{output_dir}/depth/frame_{i:06d}.png")
+                depth_pil.save(f"{output_dir}/depth_vis/{i:05d}.png")
                 
-                # 保存原始深度
-                np.save(f"{output_dir}/depth/frame_{i:06d}.npy", depth)
+                # 保存原始深度数据
+                np.savez_compressed(f"{output_dir}/depth/{i:05d}.npz", depth=depth)
                 
             if (i + 1) % 10 == 0:
                 print(f"渲染进度: {i + 1}/{len(camera_poses)} 帧")
                 
         # 保存相机参数和关节状态
         if save_frames:
+            # 保存相机外参到JSON文件
             with open(f"{output_dir}/camera_params.json", 'w') as f:
                 json.dump(self.camera_params, f, indent=2)
+            
+            # 保存相机内参到txt文件
+            np.savetxt(f"{output_dir}/cam_K.txt", self.intrinsic_matrix, fmt='%.6f')
                 
+            # 保存关节状态
             with open(f"{output_dir}/joint_states.json", 'w') as f:
                 json.dump(joint_states, f, indent=2)
                 

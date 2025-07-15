@@ -13,6 +13,7 @@ Features:
 """
 
 import sapien.core as sapien
+from sapien.sensor import ActiveLightSensor
 import numpy as np
 import cv2
 import json
@@ -24,7 +25,7 @@ from typing import List, Tuple, Optional
 
 
 class PartNetVideoRenderer:
-    def __init__(self, width: int = 640, height: int = 480, fps: int = 30):
+    def __init__(self, width: int = 640, height: int = 480, fps: int = 30, use_realistic_depth: bool = False):
         """
         Initialize the renderer for PartNet-Mobility objects.
         
@@ -32,10 +33,13 @@ class PartNetVideoRenderer:
             width: Image width
             height: Image height  
             fps: Frames per second for video output
+            use_realistic_depth: Whether to use ActiveLightSensor for realistic depth (CPU-based)
+                                Note: Set to False for more reliable traditional depth
         """
         self.width = width
         self.height = height
         self.fps = fps
+        self.use_realistic_depth = use_realistic_depth
         
         # Initialize SAPIEN
         self.engine = sapien.Engine()
@@ -51,6 +55,10 @@ class PartNetVideoRenderer:
         
         # Setup camera
         self._setup_camera()
+        
+        # Setup depth sensor if enabled
+        if self.use_realistic_depth:
+            self._setup_depth_sensor()
         
         # Storage for frames and camera parameters
         self.rgb_frames = []
@@ -84,6 +92,24 @@ class PartNetVideoRenderer:
         # Store intrinsic matrix
         self.intrinsic_matrix = self.camera.get_intrinsic_matrix()
         print(f"Camera intrinsic matrix:\n{self.intrinsic_matrix}")
+        
+    def _setup_depth_sensor(self):
+        """Setup ActiveLightSensor for realistic depth generation on CPU."""
+        try:
+            # 直接创建ActiveLightSensor，使用预设的sensor_type
+            self.depth_sensor = ActiveLightSensor(
+                sensor_name='depth_sensor',
+                renderer=self.renderer,
+                scene=self.scene,
+                sensor_type='d415',  # 使用新的预设配置名称
+                rgb_resolution=(self.width, self.height),
+                ir_resolution=(self.width, self.height)
+            )
+            print(f"ActiveLightSensor initialized with resolution {self.width}x{self.height} (CPU-based)")
+        except Exception as e:
+            print(f"Warning: Failed to initialize ActiveLightSensor: {e}")
+            print("Falling back to traditional depth rendering")
+            self.use_realistic_depth = False
         
     def load_partnet_object(self, urdf_path: str) -> sapien.Articulation:
         """
@@ -307,9 +333,21 @@ class PartNetVideoRenderer:
         rgba = self.camera.get_float_texture('Color')
         rgb = (rgba[..., :3] * 255).clip(0, 255).astype(np.uint8)
         
-        # Get depth
-        position = self.camera.get_float_texture('Position')
-        depth = -position[..., 2]  # OpenGL convention
+        # 根据模式获取深度
+        if self.use_realistic_depth and hasattr(self, 'depth_sensor'):
+            print("Using ActiveLightSensor for depth")
+            # 使用ActiveLightSensor获得真实深度图
+            # 注意：ActiveLightSensor可能不需要compute_depth()步骤
+            sensor_pose = self.camera_mount.get_pose()
+            self.depth_sensor.set_pose(sensor_pose)
+            self.scene.update_render()
+            self.depth_sensor.take_picture()
+            depth = self.depth_sensor.get_depth()
+        
+        else:
+            # 使用position-based深度
+            position = self.camera.get_float_texture('Position')
+            depth = -position[..., 2]  # OpenGL convention
         
         # Get camera extrinsic parameters
         model_matrix = self.camera.get_model_matrix()
@@ -320,10 +358,7 @@ class PartNetVideoRenderer:
             'camera_pose': {
                 'position': camera_pose.p.tolist(),
                 'quaternion': camera_pose.q.tolist()  # [w, x, y, z]
-            },
-            'intrinsic_matrix': self.intrinsic_matrix.tolist(),
-            'width': self.width,
-            'height': self.height
+            }
         }
         
         return rgb, depth, camera_params
@@ -338,6 +373,7 @@ class PartNetVideoRenderer:
             save_frames: Whether to save individual frames
             output_dir: Output directory
         """
+
         # Create output directory
         if save_frames:
             os.makedirs(output_dir, exist_ok=True)
@@ -354,6 +390,10 @@ class PartNetVideoRenderer:
             # Set camera pose
             self.camera_mount.set_pose(pose)
             
+            # 如果使用ActiveLightSensor，也需要设置其pose
+            if self.use_realistic_depth and hasattr(self, 'depth_sensor'):
+                self.depth_sensor.set_pose(pose)
+            
             # Capture frame
             rgb, depth, params = self.capture_frame()
             
@@ -368,8 +408,28 @@ class PartNetVideoRenderer:
                 rgb_pil = Image.fromarray(rgb)
                 rgb_pil.save(f"{output_dir}/rgb/frame_{i:06d}.png")
                 
-                # Save depth (normalized for visualization)
-                depth_normalized = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
+                # Save depth (improved normalization for visualization)
+                # 先检查深度值的有效性
+                valid_depth = depth.copy()
+                
+                # 处理ActiveLightSensor可能产生的异常值
+                if self.use_realistic_depth:
+                    # 将无效值（nan, inf, 负值）替换为最大有效值
+                    finite_mask = np.isfinite(valid_depth) & (valid_depth > 0)
+                    if np.any(finite_mask):
+                        max_valid_depth = np.max(valid_depth[finite_mask])
+                        valid_depth = np.where(finite_mask, valid_depth, max_valid_depth)
+                    else:
+                        # 如果没有有效深度值，使用相机的远平面
+                        valid_depth = np.full_like(depth, 100.0)
+                
+                # 归一化深度图用于可视化
+                depth_min, depth_max = valid_depth.min(), valid_depth.max()
+                if depth_max > depth_min:
+                    depth_normalized = (valid_depth - depth_min) / (depth_max - depth_min)
+                else:
+                    depth_normalized = np.zeros_like(valid_depth)
+                
                 depth_img = (depth_normalized * 255).astype(np.uint8)
                 depth_pil = Image.fromarray(depth_img)
                 depth_pil.save(f"{output_dir}/depth/frame_{i:06d}.png")
@@ -382,8 +442,12 @@ class PartNetVideoRenderer:
                 
         # Save camera parameters
         if save_frames:
+            # 保存相机外参到JSON文件
             with open(f"{output_dir}/camera_params.json", 'w') as f:
                 json.dump(self.camera_params, f, indent=2)
+            
+            # 保存相机内参到txt文件
+            np.savetxt(f"{output_dir}/cam_K.txt", self.intrinsic_matrix, fmt='%.6f')
                 
         print("Rendering complete!")
         
@@ -415,18 +479,44 @@ class PartNetVideoRenderer:
             rgb_writer.write(bgr_frame)
         rgb_writer.release()
         
-        # Create depth video (normalized)
+        # Create depth video (colorized)
         depth_path = f"{output_dir}/{depth_video_name}"
-        depth_writer = cv2.VideoWriter(depth_path, fourcc, self.fps, (self.width, self.height), False)
+        depth_writer = cv2.VideoWriter(depth_path, fourcc, self.fps, (self.width, self.height), True)  # isColor=True
         
-        # Normalize depth across all frames for consistent visualization
-        all_depths = np.concatenate([d.flatten() for d in self.depth_frames])
-        depth_min, depth_max = all_depths.min(), all_depths.max()
+        # Import matplotlib for colormap
+        import matplotlib.cm as cm
+        
+        # Normalize depth across all frames for consistent visualization (excluding zeros)
+        all_valid_depths = []
+        for d in self.depth_frames:
+            valid_depths = d[d > 0]
+            if len(valid_depths) > 0:
+                all_valid_depths.extend(valid_depths.flatten())
+        
+        if len(all_valid_depths) > 0:
+            depth_min, depth_max = np.min(all_valid_depths), np.max(all_valid_depths)
+        else:
+            depth_min, depth_max = 0, 1
         
         for depth_frame in self.depth_frames:
-            depth_normalized = (depth_frame - depth_min) / (depth_max - depth_min + 1e-8)
-            depth_img = (depth_normalized * 255).astype(np.uint8)
-            depth_writer.write(depth_img)
+            # Normalize depth excluding zeros
+            depth_normalized = np.zeros_like(depth_frame)
+            mask = depth_frame > 0
+            if np.any(mask):
+                depth_normalized[mask] = (depth_frame[mask] - depth_min) / (depth_max - depth_min + 1e-8)
+            
+            # Apply colormap (viridis)
+            colormap = cm.viridis
+            depth_colored = colormap(depth_normalized)
+            
+            # Set zero areas to black
+            depth_colored[~mask] = [0, 0, 0, 1]
+            
+            # Convert to BGR format for OpenCV (8-bit)
+            depth_img_bgr = (depth_colored[:, :, :3] * 255).astype(np.uint8)
+            depth_img_bgr = cv2.cvtColor(depth_img_bgr, cv2.COLOR_RGB2BGR)
+            
+            depth_writer.write(depth_img_bgr)
         depth_writer.release()
         
         print(f"Videos saved:")
@@ -437,8 +527,8 @@ class PartNetVideoRenderer:
 def main():
     """Example usage of the PartNet video renderer."""
     
-    # Initialize renderer
-    renderer = PartNetVideoRenderer(width=640, height=480, fps=30)
+    # Initialize renderer with traditional depth (more reliable)
+    renderer = PartNetVideoRenderer(width=640, height=480, fps=30, use_realistic_depth=True)
     
     # Load PartNet-Mobility object
     # Replace with your actual URDF path

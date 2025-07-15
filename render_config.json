@@ -76,7 +76,7 @@
     },
     "sphere_spiral_custom": {
       "type": "sphere_spiral",
-      "radius": 8.0,
+      "radius": 5.0,
       "start_elevation": 60,
       "end_elevation": -60,
       "rotations": 5,
