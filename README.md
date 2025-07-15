@@ -1,19 +1,12 @@
-
 # SAPIEN PartNet-Mobility 视频渲染器
 
 一个功能强大的 3D 物体视频渲染工具，支持多种相机轨迹、关节动画和高质量渲染。
-**新版特性：**
-- 深度数据分离存储：depth/（原始.npz）与 depth_vis/（彩色可视化.png），0区为黑色，0值不参与归一化
-- 相机内参仅保存 cam_K.txt，外参为 camera_params.json，去除冗余
-- 关节动画支持周期、振荡、顺序、大幅度及自定义类型
-- .gitignore 默认排除 partnet-mobility-v0/ 和 sapien_code/，避免上传数据集和源码
-- 已移除 image_info.txt，文件结构更简洁
 
 ## 🚀 快速开始
 
 ### 安装依赖
 ```bash
-pip install sapien>=2.2 numpy opencv-python pillow matplotlib
+pip install sapien==2.2 numpy opencv-python pillow matplotlib
 ```
 
 ### 基础使用
@@ -258,8 +251,7 @@ renderer = AnimatedRenderer(debug=True)
 
 ---
 **注意：**
-- 请勿上传 partnet-mobility-v0/ 数据集和 sapien_code/ 源码文件夹，已在 .gitignore 默认排除。
-- 输出目录结构已优化，image_info.txt 已移除。
+- partnet-mobility-v0/ 数据集请通过sapien平台自行下载
 
 ## 📄 许可证
 
