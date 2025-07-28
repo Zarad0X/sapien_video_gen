@@ -17,9 +17,9 @@ class AnimatedRenderer(PartNetVideoRenderer):
         self.articulation = None
         self.joint_animations = {}
         
-    def load_partnet_object(self, urdf_path: str) -> sapien.Articulation:
-        """Load PartNet-Mobility object and store articulation reference."""
-        self.articulation = super().load_partnet_object(urdf_path)
+    def load_partnet_object(self, urdf_path: str, scale: float = 1.0) -> sapien.Articulation:
+        """Load PartNet-Mobility object with scale, and store articulation reference."""
+        self.articulation = super().load_partnet_object(urdf_path, scale=scale)
         self._analyze_joints()
         return self.articulation
     
@@ -63,13 +63,14 @@ class AnimatedRenderer(PartNetVideoRenderer):
         print("  animations = renderer.create_custom_animation()")  # 使用默认参数
     
     def create_custom_animation(self, animation_config: Optional[Dict[str, Dict]] = None, 
-                               auto_assign: bool = True) -> Dict[str, Callable]:
+                               auto_assign: bool = True, static_mode: bool = False) -> Dict[str, Callable]:
         """
         创建关节动画配置
         
         Args:
             animation_config: 手动指定的关节动画配置（可选）
             auto_assign: 是否自动为未指定的关节分配默认动画
+            static_mode: 是否使用静态模式（关节不运动）
         
         Returns:
             关节动画函数字典
@@ -78,6 +79,17 @@ class AnimatedRenderer(PartNetVideoRenderer):
         
         # 获取所有可动关节
         movable_joints = self._get_movable_joints()
+        
+        # 静态模式：所有关节保持在中间位置不运动
+        if static_mode:
+            for joint_name, joint_info in movable_joints.items():
+                def make_static_func(joint_limits):
+                    def static_func(t, frame_count):
+                        # 返回关节限制的中间位置
+                        return (joint_limits[0] + joint_limits[1]) / 2
+                    return static_func
+                animations[joint_name] = make_static_func(joint_info['limits'])
+            return animations
         
         # 如果没有提供配置或需要自动分配，创建默认配置
         if animation_config is None:
@@ -361,67 +373,67 @@ class AnimatedRenderer(PartNetVideoRenderer):
         print("动画渲染完成！")
 
 
-def create_example_animation_config():
-    """
-    创建示例动画配置 - 演示手动配置特定关节
-    返回部分关节的手动配置，其他关节将自动分配
-    """
-    return {
-        # 只手动配置前两个关节，其他关节会自动分配
-        "joint_0": {
-            "type": "sine",
-            "range": [0.0, 0.3],  # 可以手动调整范围
-            "frequency": 2.0,     # 快速运动
-            "phase": 0.0,
-            "offset": 0.0
-        },
+# def create_example_animation_config():
+#     """
+#     创建示例动画配置 - 演示手动配置特定关节
+#     返回部分关节的手动配置，其他关节将自动分配
+#     """
+#     return {
+#         # 只手动配置前两个关节，其他关节会自动分配
+#         "joint_0": {
+#             "type": "sine",
+#             "range": [0.0, 0.3],  # 可以手动调整范围
+#             "frequency": 2.0,     # 快速运动
+#             "phase": 0.0,
+#             "offset": 0.0
+#         },
         
-        "joint_1": {
-            "type": "linear",
-            "frequency": 0.5,     # 慢速线性运动
-            "phase": 0.0,
-            "offset": 0.0
-            # 注意：没有指定range，将使用关节的安全范围（限制的80%）
-        }
+#         "joint_1": {
+#             "type": "linear",
+#             "frequency": 0.5,     # 慢速线性运动
+#             "phase": 0.0,
+#             "offset": 0.0
+#             # 注意：没有指定range，将使用关节的安全范围（限制的80%）
+#         }
         
-        # joint_2, joint_3 等将自动分配不同的动画模式
-    }
+#         # joint_2, joint_3 等将自动分配不同的动画模式
+#     }
 
 
-def create_full_manual_config():
-    """创建完整手动配置的示例 - 所有关节都手动指定"""
-    return {
-        "joint_0": {
-            "type": "sine",
-            "range": [0.0, 0.368],
-            "frequency": 1.0,
-            "phase": 0.0,
-            "offset": 0.0
-        },
+# def create_full_manual_config():
+#     """创建完整手动配置的示例 - 所有关节都手动指定"""
+#     return {
+#         "joint_0": {
+#             "type": "sine",
+#             "range": [0.0, 0.368],
+#             "frequency": 1.0,
+#             "phase": 0.0,
+#             "offset": 0.0
+#         },
         
-        "joint_1": {
-            "type": "linear",
-            "range": [0.0, 0.368],
-            "frequency": 0.5,
-            "phase": 0.0,
-            "offset": 0.0
-        },
+#         "joint_1": {
+#             "type": "linear",
+#             "range": [0.0, 0.368],
+#             "frequency": 0.5,
+#             "phase": 0.0,
+#             "offset": 0.0
+#         },
         
-        "joint_2": {
-            "type": "sine",
-            "range": [0.0, 0.368],
-            "frequency": 1.5,
-            "phase": np.pi/2,
-            "offset": 0.0
-        },
+#         "joint_2": {
+#             "type": "sine",
+#             "range": [0.0, 0.368],
+#             "frequency": 1.5,
+#             "phase": np.pi/2,
+#             "offset": 0.0
+#         },
         
-        "joint_3": {
-            "type": "sine",
-            "range": [0.0, 0.368],
-            "frequency": 0.8,
-            "phase": np.pi,
-            "offset": 0.0
-        }
-    }
+#         "joint_3": {
+#             "type": "sine",
+#             "range": [0.0, 0.368],
+#             "frequency": 0.8,
+#             "phase": np.pi,
+#             "offset": 0.0
+#         }
+#     }
 
 

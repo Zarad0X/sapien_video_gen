@@ -71,17 +71,14 @@ class PartNetVideoRenderer:
         print(f"Camera intrinsic matrix:\n{self.intrinsic_matrix}")
         
         
-    def load_partnet_object(self, urdf_path: str) -> sapien.Articulation:
-        
+    def load_partnet_object(self, urdf_path: str, scale: float = 1.0) -> sapien.Articulation:
         loader = self.scene.create_urdf_loader()
         loader.fix_root_link = True
-        
-        # Load as kinematic articulation (can also use load() for dynamic)
+        loader.scale = scale  # 关键：设置缩放
         asset = loader.load_kinematic(urdf_path)
         if not asset:
             raise ValueError(f"Failed to load URDF from {urdf_path}")
-            
-        print(f"Loaded object: {urdf_path}")
+        print(f"Loaded object: {urdf_path} (scale={scale})")
         return asset
         
     def generate_circular_trajectory(self, center: np.ndarray, radius: float, 
