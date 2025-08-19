@@ -63,7 +63,8 @@ class AnimatedRenderer(PartNetVideoRenderer):
         print("  animations = renderer.create_custom_animation()")  # 使用默认参数
     
     def create_custom_animation(self, animation_config: Optional[Dict[str, Dict]] = None, 
-                               auto_assign: bool = True, static_mode: bool = False) -> Dict[str, Callable]:
+                               auto_assign: bool = True, static_mode: bool = False,
+                               speed_multiplier: float = 1.0) -> Dict[str, Callable]:
         """
         创建关节动画配置
         
@@ -71,6 +72,7 @@ class AnimatedRenderer(PartNetVideoRenderer):
             animation_config: 手动指定的关节动画配置（可选）
             auto_assign: 是否自动为未指定的关节分配默认动画
             static_mode: 是否使用静态模式（关节不运动）
+            speed_multiplier: 全局速度倍增系数，>1 更快，<1 更慢（默认 1.0）
         
         Returns:
             关节动画函数字典
@@ -95,18 +97,21 @@ class AnimatedRenderer(PartNetVideoRenderer):
         if animation_config is None:
             animation_config = {}
         
-        # 处理手动指定的关节配置
+        # 处理手动指定的关节配置（应用速度倍增）
         for joint_name, config in animation_config.items():
             if joint_name in movable_joints:
-                animations[joint_name] = self._create_animation_function(config, movable_joints[joint_name])
+                adj_config = dict(config)
+                adj_config['frequency'] = config.get('frequency', 1.0) * speed_multiplier
+                animations[joint_name] = self._create_animation_function(adj_config, movable_joints[joint_name])
         
-        # 自动为未指定的关节分配默认动画
+        # 自动为未指定的关节分配默认动画（应用速度倍增）
         if auto_assign:
             assigned_joints = set(animation_config.keys())
             unassigned_joints = [name for name in movable_joints.keys() if name not in assigned_joints]
             
             for i, joint_name in enumerate(unassigned_joints):
                 default_config = self._get_default_animation_config(i, movable_joints[joint_name])
+                default_config['frequency'] = default_config.get('frequency', 1.0) * speed_multiplier
                 animations[joint_name] = self._create_animation_function(default_config, movable_joints[joint_name])
         
         return animations
@@ -158,17 +163,25 @@ class AnimatedRenderer(PartNetVideoRenderer):
         
         # 根据关节类型调整范围
         if joint_type == 'prismatic':
-            # 移动关节：使用实际限制的80%
-            range_span = limits[1] - limits[0]
-            safe_range = range_span * 0.8
-            center = (limits[0] + limits[1]) / 2
-            animation_range = [center - safe_range/2, center + safe_range/2]
+            # 移动关节：检查是否为无限限制
+            if np.isinf(limits[0]) or np.isinf(limits[1]):
+                # 无限限制：使用默认范围
+                animation_range = [-0.1, 0.1]  # 默认移动范围
+            else:
+                range_span = limits[1] - limits[0]
+                safe_range = range_span * 0.8
+                center = (limits[0] + limits[1]) / 2
+                animation_range = [center - safe_range/2, center + safe_range/2]
         else:
-            # 旋转关节：使用实际限制的80%
-            range_span = limits[1] - limits[0]
-            safe_range = range_span * 0.8
-            center = (limits[0] + limits[1]) / 2
-            animation_range = [center - safe_range/2, center + safe_range/2]
+            # 旋转关节：检查是否为无限限制（continuous joint）
+            if np.isinf(limits[0]) or np.isinf(limits[1]):
+                # 无限旋转：使用完整圆周范围
+                animation_range = [0.0, 2 * np.pi]  # 0到2π的完整旋转
+            else:
+                range_span = limits[1] - limits[0]
+                safe_range = range_span * 0.8
+                center = (limits[0] + limits[1]) / 2
+                animation_range = [center - safe_range/2, center + safe_range/2]
         
         return {
             "type": pattern["type"],

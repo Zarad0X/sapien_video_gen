@@ -1,4 +1,3 @@
-
 import argparse
 import sys
 import os
@@ -25,7 +24,7 @@ def check_dependencies():
 def custom_animated_render(urdf_path: str, config: str = "high_quality", 
                           trajectory: str = "sphere_spiral_custom", lighting: str = "standard",
                           output_dir: str = None, static: bool = False, scale: float = 1.0,
-                          rotation_angle: float = 0.0):
+                          rotation_angle: float = 0.0, speed_multiplier: float = 1.0):
   
     
     if not check_dependencies():
@@ -38,6 +37,10 @@ def custom_animated_render(urdf_path: str, config: str = "high_quality",
         print(f"Starting custom animated render of: {urdf_path}")
         print(f"   Config: {config}, Trajectory: {trajectory}, Lighting: {lighting}")
         print("   Using custom per-joint animation modes")
+        if static:
+            print("   Joint animation: static mode")
+        else:
+            print(f"   Joint animation speed x{speed_multiplier}")
         
         # Create animated renderer
         if config == "high_quality":
@@ -79,7 +82,7 @@ def custom_animated_render(urdf_path: str, config: str = "high_quality",
             )
         elif trajectory == "sphere_spiral_custom":
             poses = renderer.generate_sphere_spiral_trajectory(
-                center=center, radius=1, start_elevation=30, end_elevation=-30, 
+                center=center, radius=1, start_elevation=60, end_elevation=-60, 
                 rotations=3, n_frames=300
             )
         else:
@@ -95,7 +98,7 @@ def custom_animated_render(urdf_path: str, config: str = "high_quality",
             custom_animations = renderer.create_custom_animation(static_mode=True)
         else:
             print("Using animated mode - joints will move automatically")
-            custom_animations = renderer.create_custom_animation()  # 使用默认自动分配
+            custom_animations = renderer.create_custom_animation(speed_multiplier=speed_multiplier)  # 速度倍增
         
         # Set output directory
         if output_dir is None:
@@ -132,13 +135,15 @@ def main():
     parser.add_argument('--trajectory', '-t', default='sphere_spiral_custom',
                        help='Camera trajectory: circular_medium, sphere_spiral_custom ')
     parser.add_argument('--lighting', '-l', default='high_quality',help='Lighting setup ')
-    parser.add_argument('--output', '-o', help='Output directory ')
+    parser.add_argument('--output', '-o', help='output directory ')
     parser.add_argument('--static', '-s', action='store_true', 
                        help='Render with static joints (no animation)')
     parser.add_argument('--scale', type=float, default=1.0,
                        help='Scale factor for loaded object (default: 1.0)')
     parser.add_argument('--rotation', type=float, default=0.0,
                        help='Initial rotation angle in degrees around Z-axis (default: 0.0)')
+    parser.add_argument('--speed', type=float, default=1.0,
+                       help='Global joint animation speed multiplier (>1 faster, <1 slower). Default: 1.0')
     
     # Utility commands
     parser.add_argument('--check-deps', action='store_true', help='Check if all dependencies are installed')
@@ -158,7 +163,7 @@ def main():
         
         
         success = custom_animated_render(args.urdf_path, args.config, args.trajectory, 
-                                       args.lighting, args.output, args.static, args.scale, args.rotation)
+                                       args.lighting, args.output, args.static, args.scale, args.rotation, args.speed)
         sys.exit(0 if success else 1)
     else:
         # No URDF path provided and no utility command

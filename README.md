@@ -200,37 +200,11 @@ output_directory/
 ```
 
 ### 创建自定义动画
-```python
-from animated_renderer import AnimatedRenderer
-
-renderer = AnimatedRenderer()
-asset = renderer.load_partnet_object("mobility.urdf")
-
-# 自定义关节动画
-custom_animations = {
-    "drawer_joint": lambda t: 0.5 * np.sin(2 * np.pi * t),
-    "door_joint": lambda t: np.pi/2 * (1 - np.cos(2 * np.pi * t))
-}
-
-renderer.set_joint_animations(custom_animations)
+```
+python quick_start.py /home/zhanghan/sapien/partnet-mobility-v0/dataset/100109/mobility.urdf   --config high_quality   --trajectory sphere_spiral_custom  --output usb --scale 0.15 --speed 3 
 ```
 
 
-
-
-### 📚 数据集批量处理
-```python
-# 批量处理PartNet-Mobility数据集
-import glob
-
-urdf_files = glob.glob("dataset/**/mobility.urdf", recursive=True)
-renderer.batch_render(
-    urdf_paths=urdf_files,
-    render_configs=["standard"],
-    trajectory_configs=["sphere_spiral_top_down"],
-    base_output_dir="dataset_videos"
-)
-```
 
 ## 🔍 故障排除
 

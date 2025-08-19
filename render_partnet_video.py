@@ -9,7 +9,7 @@ from typing import List, Tuple, Optional
 
 
 class PartNetVideoRenderer:
-    def __init__(self, width: int = 640, height: int = 480, fps: int = 30):
+    def __init__(self, width: int = 640, height: int = 480, fps: int = 30, background_color=(1.0, 1.0, 1.0)):
         """
         Initialize PartNet Video Renderer.
         
@@ -17,6 +17,7 @@ class PartNetVideoRenderer:
             width: Image width
             height: Image height 
             fps: Frames per second for video output
+            background_color: 背景颜色 (r,g,b) 0~1 浮点
         """
         self.width = width
         self.height = height
@@ -27,9 +28,19 @@ class PartNetVideoRenderer:
         self.renderer = sapien.SapienRenderer()
         self.engine.set_renderer(self.renderer)
         
+        # 设置背景色（如果API支持）
+        if hasattr(self.renderer, 'set_clear_color'):
+            try:
+                self.renderer.set_clear_color(background_color)
+            except Exception:
+                pass
+        self._background_color = background_color
+        
         # Create scene
         self.scene = self.engine.create_scene()
         self.scene.set_timestep(1 / 100.0)
+        
+        # 删除原先添加的大平面，改为后处理填充背景色
         
         # Setup lighting
         self._setup_lighting()
@@ -211,15 +222,20 @@ class PartNetVideoRenderer:
         position = self.camera.get_float_texture('Position')
         depth = -position[..., 2]  
         
-        # Get camera extrinsic parameters
+        # 用深度无效区域 (depth<=0) 作为背景掩码，填充背景颜色
+        bg_mask = depth <= 0
+        if np.any(bg_mask):
+            bg_color_255 = (np.array(self._background_color) * 255).astype(np.uint8)
+            rgb[bg_mask] = bg_color_255
+        
+        # 获取相机外参
         model_matrix = self.camera.get_model_matrix()
         camera_pose = self.camera_mount.get_pose()
-        
         camera_params = {
             'model_matrix': model_matrix.tolist(),
             'camera_pose': {
                 'position': camera_pose.p.tolist(),
-                'quaternion': camera_pose.q.tolist()  # [w, x, y, z]
+                'quaternion': camera_pose.q.tolist()
             }
         }
         
@@ -278,8 +294,9 @@ class PartNetVideoRenderer:
             colormap = cm.viridis
             depth_colored = colormap(depth_normalized)
             
-            # Set zero areas to black
-            depth_colored[~mask] = [0, 0, 0, 1]
+            # Set zero areas to background color (转换到0-1范围)
+            bg = list(self._background_color) + [1]
+            depth_colored[~mask] = bg
             
             # Convert to BGR format for OpenCV (8-bit)
             depth_img_bgr = (depth_colored[:, :, :3] * 255).astype(np.uint8)
