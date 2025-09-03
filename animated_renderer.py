@@ -2,6 +2,7 @@ import json
 import os
 import numpy as np
 from typing import List, Dict, Callable, Optional
+from tqdm import tqdm
 
 import sapien.core as sapien
 from render_partnet_video import PartNetVideoRenderer
@@ -24,13 +25,13 @@ class AnimatedRenderer(PartNetVideoRenderer):
         return self.articulation
     
     def _analyze_joints(self):
-        """分析关节信息"""
+        """Analyze joint information"""
         if not self.articulation:
             return
             
         joints = self.articulation.get_joints()
-        print(f"\n=== 关节分析 ===")
-        print(f"总关节数: {len(joints)}")
+        print(f"\n=== Joint Analysis ===")
+        print(f"Total joints: {len(joints)}")
         
         movable_joints = []
         for i, joint in enumerate(joints):
@@ -41,83 +42,75 @@ class AnimatedRenderer(PartNetVideoRenderer):
                 joint_type = "unknown"
                 
             limits = joint.get_limits()
-            print(f"关节 {i}: {joint.name}")
-            print(f"  类型: {joint_type}")
+            print(f"Joint {i}: {joint.name}")
+            print(f"  Type: {joint_type}")
             if len(limits) > 0 and len(limits[0]) == 2:
-                print(f"  限制: [{limits[0][0]:.3f}, {limits[0][1]:.3f}]")
+                print(f"  Limits: [{limits[0][0]:.3f}, {limits[0][1]:.3f}]")
                 movable_joints.append(joint.name)
             else:
-                print(f"  限制: 无限制")
+                print(f"  Limits: Unlimited")
         
-        print(f"\n=== 可动关节列表 ===")
+        print(f"\n=== Movable Joints List ===")
         for joint_name in movable_joints:
             print(f"  - '{joint_name}'")
         
-        print(f"\n=== 动画配置说明 ===")
-        print("默认模式：自动为所有关节分配不同的动画")
-        print("手动模式：可以指定特定关节的动画配置")
-        print("示例手动配置：")
-        print("  config = {'joint_0': {'type': 'sine', 'frequency': 2.0}}")
-        print("  animations = renderer.create_custom_animation(config)")
-        print("示例纯自动配置：")
-        print("  animations = renderer.create_custom_animation()")  # 使用默认参数
     
     def create_custom_animation(self, animation_config: Optional[Dict[str, Dict]] = None, 
                                auto_assign: bool = True, static_mode: bool = False,
-                               speed_multiplier: float = 1.0) -> Dict[str, Callable]:
+                               speed: float = 1.0) -> Dict[str, Callable]:
         """
-        创建关节动画配置
+        Create joint animation configuration
         
         Args:
-            animation_config: 手动指定的关节动画配置（可选）
-            auto_assign: 是否自动为未指定的关节分配默认动画
-            static_mode: 是否使用静态模式（关节不运动）
-            speed_multiplier: 全局速度倍增系数，>1 更快，<1 更慢（默认 1.0）
+            animation_config: Manually specified joint animation configuration (optional)
+            auto_assign: Whether to automatically assign default animations to unspecified joints
+            static_mode: Whether to use static mode (joints don't move)
+            speed: Global speed multiplier, >1 faster, <1 slower (default 1.0)
         
         Returns:
-            关节动画函数字典
+            Joint animation function dictionary
         """
         animations = {}
         
-        # 获取所有可动关节
+        # Get all movable joints
         movable_joints = self._get_movable_joints()
         
-        # 静态模式：所有关节保持在中间位置不运动
+        # Static mode: all joints stay at middle position without movement
         if static_mode:
             for joint_name, joint_info in movable_joints.items():
                 def make_static_func(joint_limits):
                     def static_func(t, frame_count):
-                        # 返回关节限制的中间位置
+                        # Return middle position of joint limits
                         return (joint_limits[0] + joint_limits[1]) / 2
                     return static_func
                 animations[joint_name] = make_static_func(joint_info['limits'])
             return animations
         
-        # 如果没有提供配置或需要自动分配，创建默认配置
+        # If no configuration provided or auto-assignment needed, create default configuration
         if animation_config is None:
             animation_config = {}
         
-        # 处理手动指定的关节配置（应用速度倍增）
+        # Handle manually specified joint configurations (apply speed multiplier)
         for joint_name, config in animation_config.items():
             if joint_name in movable_joints:
                 adj_config = dict(config)
-                adj_config['frequency'] = config.get('frequency', 1.0) * speed_multiplier
+                adj_config['frequency'] = config.get('frequency', 1.0) * speed
                 animations[joint_name] = self._create_animation_function(adj_config, movable_joints[joint_name])
         
-        # 自动为未指定的关节分配默认动画（应用速度倍增）
+        # Automatically assign default animations to unspecified joints (apply speed multiplier)
         if auto_assign:
             assigned_joints = set(animation_config.keys())
             unassigned_joints = [name for name in movable_joints.keys() if name not in assigned_joints]
             
             for i, joint_name in enumerate(unassigned_joints):
                 default_config = self._get_default_animation_config(i, movable_joints[joint_name])
-                default_config['frequency'] = default_config.get('frequency', 1.0) * speed_multiplier
+                default_config['frequency'] = default_config.get('frequency', 1.0) * speed
                 animations[joint_name] = self._create_animation_function(default_config, movable_joints[joint_name])
         
         return animations
     
     def _get_movable_joints(self) -> Dict[str, Dict]:
-        """获取所有可动关节及其信息"""
+        """Get all movable joints and their information"""
         if not self.articulation:
             return {}
         
@@ -125,7 +118,7 @@ class AnimatedRenderer(PartNetVideoRenderer):
         joints = self.articulation.get_joints()
         
         for joint in joints:
-            # 检查关节是否可动
+            # Check if joint is movable
             if hasattr(joint, 'type'):
                 joint_type_str = str(joint.type).lower()
                 is_movable = 'revolute' in joint_type_str or 'prismatic' in joint_type_str
@@ -144,11 +137,11 @@ class AnimatedRenderer(PartNetVideoRenderer):
         return movable_joints
     
     def _get_default_animation_config(self, index: int, joint_info: Dict) -> Dict:
-        """为关节生成默认动画配置"""
+        """Generate default animation configuration for joint"""
         joint_type = joint_info['type']
         limits = joint_info['limits']
         
-        # 预定义的动画模式
+        # Predefined animation patterns
         animation_patterns = [
             {"type": "sine", "frequency": 1.0, "phase": 0.0},
             {"type": "linear", "frequency": 0.5, "phase": 0.0},
@@ -158,25 +151,25 @@ class AnimatedRenderer(PartNetVideoRenderer):
             {"type": "sine", "frequency": 1.2, "phase": 3*np.pi/2}
         ]
         
-        # 循环使用动画模式
+        # Use animation patterns cyclically
         pattern = animation_patterns[index % len(animation_patterns)]
         
-        # 根据关节类型调整范围
+        # Adjust range based on joint type
         if joint_type == 'prismatic':
-            # 移动关节：检查是否为无限限制
+            # Moving joint: check if limits are infinite
             if np.isinf(limits[0]) or np.isinf(limits[1]):
-                # 无限限制：使用默认范围
-                animation_range = [-0.1, 0.1]  # 默认移动范围
+                # Infinite limits: use default range
+                animation_range = [-0.1, 0.1]  # Default movement range
             else:
                 range_span = limits[1] - limits[0]
                 safe_range = range_span * 0.8
                 center = (limits[0] + limits[1]) / 2
                 animation_range = [center - safe_range/2, center + safe_range/2]
         else:
-            # 旋转关节：检查是否为无限限制（continuous joint）
+            # Rotation joint: check if limits are infinite (continuous joint)
             if np.isinf(limits[0]) or np.isinf(limits[1]):
-                # 无限旋转：使用完整圆周范围
-                animation_range = [0.0, 2 * np.pi]  # 0到2π的完整旋转
+                # Infinite rotation: use full circle range
+                animation_range = [0.0, 2 * np.pi]  # Full rotation from 0 to 2π
             else:
                 range_span = limits[1] - limits[0]
                 safe_range = range_span * 0.8
@@ -192,7 +185,7 @@ class AnimatedRenderer(PartNetVideoRenderer):
         }
     
     def _create_animation_function(self, config: Dict, joint_info: Dict) -> Callable:
-        """根据配置创建动画函数"""
+        """Create animation function based on configuration"""
         anim_type = config.get("type", "sine")
         angle_range = config.get("range", joint_info['limits'])
         frequency = config.get("frequency", 1.0)
@@ -211,7 +204,7 @@ class AnimatedRenderer(PartNetVideoRenderer):
         elif anim_type == "linear":
             def make_linear_func(min_angle, max_angle, freq, ph, off):
                 def linear_func(t, frame_count):
-                    # 线性往返运动
+                    # Linear back-and-forth movement
                     cycle_t = (freq * t + ph / (2 * np.pi)) % 1.0
                     if cycle_t <= 0.5:
                         progress = cycle_t * 2  # 0 to 1
@@ -221,42 +214,48 @@ class AnimatedRenderer(PartNetVideoRenderer):
                 return linear_func
             return make_linear_func(angle_range[0], angle_range[1], frequency, phase, offset)
         
+        elif anim_type == "static":
+            # Static function: joint stays at specified position without movement
+            def make_static_func(min_angle, max_angle, off):
+                def static_func(t, frame_count):
+                    # Can choose to stay at middle position + offset, or specific position
+                    return (min_angle + max_angle) / 2 + off
+                return static_func
+            return make_static_func(angle_range[0], angle_range[1], offset)
+        
         else:
-            # 默认返回静止函数
+            # Default return static function (compatible with unknown types)
             def static_func(t, frame_count):
                 return (angle_range[0] + angle_range[1]) / 2
             return static_func
     
-    def set_joint_animations(self, animations: Dict[str, Callable]):
-        """设置关节动画函数"""
-        self.joint_animations = animations
     
     def animate_joints(self, t: float, frame_count: int):
         """
-        在指定时间应用关节动画
+        Apply joint animations at specified time
         
         Args:
-            t: 归一化时间 (0 到 1)
-            frame_count: 总帧数
+            t: Normalized time (0 to 1)
+            frame_count: Total frame count
         """
         if not self.articulation or not self.joint_animations:
             return
         
-        # 获取当前关节位置
+        # Get current joint positions
         qpos = self.articulation.get_qpos().copy()
         joints_list = self.articulation.get_joints()
         
-        # 创建关节名称到索引的映射
+        # Create mapping from joint name to index
         joint_name_to_idx = {}
         movable_joint_idx = 0
         
         for i, joint in enumerate(joints_list):
-            # 检查关节是否可动
+            # Check if joint is movable
             if hasattr(joint, 'type'):
                 joint_type_str = str(joint.type).lower()
                 is_movable = 'revolute' in joint_type_str or 'prismatic' in joint_type_str
             else:
-                # 备用检查：看是否有限制
+                # Backup check: see if it has limits
                 limits = joint.get_limits()
                 is_movable = len(limits) > 0 and len(limits[0]) == 2
             
@@ -264,7 +263,7 @@ class AnimatedRenderer(PartNetVideoRenderer):
                 joint_name_to_idx[joint.name] = movable_joint_idx
                 movable_joint_idx += 1
         
-        # 应用动画到每个关节
+        # Apply animations to each joint
         animated_joints = []
         for joint_name, animation_func in self.joint_animations.items():
             if joint_name in joint_name_to_idx:
@@ -275,52 +274,57 @@ class AnimatedRenderer(PartNetVideoRenderer):
                     qpos[joint_idx] = target_angle
                     animated_joints.append(f"{joint_name}={target_angle:.3f}")
         
-        # 设置新的关节位置
+        # Set new joint positions
         if animated_joints:
             try:
                 self.articulation.set_qpos(qpos)
-                # 重要：步进仿真以更新物理状态
+                # Important: step simulation to update physics state
                 self.scene.step()
             except Exception as e:
-                print(f"关节动画设置失败: {e}")
-                print(f"  qpos长度: {len(qpos)}, 关节映射: {joint_name_to_idx}")
+                print(f"Joint animation setting failed: {e}")
+                print(f"  qpos length: {len(qpos)}, joint mapping: {joint_name_to_idx}")
     
     def render_animated_sequence(self, camera_poses: List[sapien.Pose], 
                                animations: Dict[str, Callable],
                                save_frames: bool = True, 
                                output_dir: str = "animated_output") -> None:
     
-        # 设置动画
-        self.set_joint_animations(animations)
+        # Set animations
+        self.joint_animations = animations
         
-        # 创建输出目录
+        # Create output directory
         if save_frames:
             os.makedirs(output_dir, exist_ok=True)
             os.makedirs(f"{output_dir}/rgb", exist_ok=True)
-            os.makedirs(f"{output_dir}/depth", exist_ok=True)  # 原始深度数据
-            os.makedirs(f"{output_dir}/vis", exist_ok=True)    # 深度图可视化
+            os.makedirs(f"{output_dir}/depth", exist_ok=True)  # Original depth data
+            os.makedirs(f"{output_dir}/vis", exist_ok=True)    # Depth visualization
             
         self.rgb_frames = []
         self.depth_frames = []
         self.camera_params = []
         joint_states = []
         
-        print(f"渲染 {len(camera_poses)} 帧动画...")
+        total_frames = len(camera_poses)
+        print(f"Rendering {total_frames} animation frames...")
+
+        # Create progress bar with tqdm
+        pbar = tqdm(total=total_frames, desc="Rendering", unit="frame", 
+                   bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]")
 
         for i, pose in enumerate(camera_poses):
-            # 计算时间进度
+            # Calculate time progress
             t = i / (len(camera_poses) - 1) if len(camera_poses) > 1 else 0.0
             
-            # 应用关节动画
+            # Apply joint animations
             self.animate_joints(t, len(camera_poses))
             
-            # 设置相机姿态
+            # Set camera pose
             self.camera_mount.set_pose(pose)
             
-            # 更新场景渲染状态
+            # Update scene render state
             self.scene.update_render()
             
-            # 记录关节状态
+            # Record joint state
             joint_state = {
                 'frame': i,
                 'time': t,
@@ -329,124 +333,63 @@ class AnimatedRenderer(PartNetVideoRenderer):
             }
             joint_states.append(joint_state)
             
-            # 捕获帧
+            # Capture frame
             rgb, depth, params = self.capture_frame()
             
-            # 存储帧
+            # Store frames
             self.rgb_frames.append(rgb)
             self.depth_frames.append(depth)
             self.camera_params.append(params)
             
-            # 保存帧
+            # Save frames
             if save_frames:
-                # 保存RGB
+                # Save RGB
                 from PIL import Image
                 rgb_pil = Image.fromarray(rgb)
                 rgb_pil.save(f"{output_dir}/rgb/{i:05d}.png")
                 
-                # 保存原始深度数据
+                # Save original depth data
                 np.savez_compressed(f"{output_dir}/depth/{i:05d}.npz", depth=depth)
                 
-                # 保存深度图可视化到vis文件夹
+                # Save depth visualization to vis folder
                 valid_depth = depth.copy()
                 
-                # 归一化深度图用于可视化
+                # Normalize depth map for visualization
                 depth_min, depth_max = valid_depth.min(), valid_depth.max()
                 if depth_max > depth_min:
                     depth_normalized = (valid_depth - depth_min) / (depth_max - depth_min)
                 else:
                     depth_normalized = np.zeros_like(valid_depth)
                 
-                # 使用彩色映射生成彩色深度图
+                # Generate colored depth map using color mapping
                 import matplotlib.cm as cm
-                colormap = cm.viridis  # 使用viridis色彩映射
+                colormap = cm.viridis  # Use viridis colormap
                 depth_colored = colormap(depth_normalized)
                 
-                # 转换为RGB格式（移除alpha通道）并转为uint8
+                # Convert to RGB format (remove alpha channel) and convert to uint8
                 depth_img_rgb = (depth_colored[:, :, :3] * 255).astype(np.uint8)
                 depth_pil = Image.fromarray(depth_img_rgb)
                 depth_pil.save(f"{output_dir}/vis/{i:05d}.png")
                 
-            if (i + 1) % 10 == 0:
-                print(f"渲染进度: {i + 1}/{len(camera_poses)} 帧")
+            # Update progress bar
+            pbar.update(1)
+        
+        # Close progress bar
+        pbar.close()
                 
-        # 保存相机参数和关节状态
+        # Save camera parameters and joint states
         if save_frames:
-            # 保存相机外参到JSON文件
+            # Save camera extrinsic parameters to JSON file
             with open(f"{output_dir}/camera_params.json", 'w') as f:
                 json.dump(self.camera_params, f, indent=2)
             
-            # 保存相机内参到txt文件
+            # Save camera intrinsic parameters to txt file
             np.savetxt(f"{output_dir}/cam_K.txt", self.intrinsic_matrix, fmt='%.6f')
                 
-            # 保存关节状态
+            # Save joint states
             with open(f"{output_dir}/joint_states.json", 'w') as f:
                 json.dump(joint_states, f, indent=2)
                 
-        print("动画渲染完成！")
-
-
-# def create_example_animation_config():
-#     """
-#     创建示例动画配置 - 演示手动配置特定关节
-#     返回部分关节的手动配置，其他关节将自动分配
-#     """
-#     return {
-#         # 只手动配置前两个关节，其他关节会自动分配
-#         "joint_0": {
-#             "type": "sine",
-#             "range": [0.0, 0.3],  # 可以手动调整范围
-#             "frequency": 2.0,     # 快速运动
-#             "phase": 0.0,
-#             "offset": 0.0
-#         },
-        
-#         "joint_1": {
-#             "type": "linear",
-#             "frequency": 0.5,     # 慢速线性运动
-#             "phase": 0.0,
-#             "offset": 0.0
-#             # 注意：没有指定range，将使用关节的安全范围（限制的80%）
-#         }
-        
-#         # joint_2, joint_3 等将自动分配不同的动画模式
-#     }
-
-
-# def create_full_manual_config():
-#     """创建完整手动配置的示例 - 所有关节都手动指定"""
-#     return {
-#         "joint_0": {
-#             "type": "sine",
-#             "range": [0.0, 0.368],
-#             "frequency": 1.0,
-#             "phase": 0.0,
-#             "offset": 0.0
-#         },
-        
-#         "joint_1": {
-#             "type": "linear",
-#             "range": [0.0, 0.368],
-#             "frequency": 0.5,
-#             "phase": 0.0,
-#             "offset": 0.0
-#         },
-        
-#         "joint_2": {
-#             "type": "sine",
-#             "range": [0.0, 0.368],
-#             "frequency": 1.5,
-#             "phase": np.pi/2,
-#             "offset": 0.0
-#         },
-        
-#         "joint_3": {
-#             "type": "sine",
-#             "range": [0.0, 0.368],
-#             "frequency": 0.8,
-#             "phase": np.pi,
-#             "offset": 0.0
-#         }
-#     }
+        print("Animation rendering completed!")
 
 

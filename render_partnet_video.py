@@ -5,6 +5,7 @@ import json
 import os
 from PIL import Image
 from pathlib import Path
+import matplotlib.cm as cm
 from typing import List, Tuple, Optional
 
 
@@ -17,7 +18,7 @@ class PartNetVideoRenderer:
             width: Image width
             height: Image height 
             fps: Frames per second for video output
-            background_color: 背景颜色 (r,g,b) 0~1 浮点
+            background_color: Background color (r,g,b) values in 0~1 float range
         """
         self.width = width
         self.height = height
@@ -28,7 +29,7 @@ class PartNetVideoRenderer:
         self.renderer = sapien.SapienRenderer()
         self.engine.set_renderer(self.renderer)
         
-        # 设置背景色（如果API支持）
+        # Set background color (if API supports it)
         if hasattr(self.renderer, 'set_clear_color'):
             try:
                 self.renderer.set_clear_color(background_color)
@@ -39,8 +40,6 @@ class PartNetVideoRenderer:
         # Create scene
         self.scene = self.engine.create_scene()
         self.scene.set_timestep(1 / 100.0)
-        
-        # 删除原先添加的大平面，改为后处理填充背景色
         
         # Setup lighting
         self._setup_lighting()
@@ -85,122 +84,12 @@ class PartNetVideoRenderer:
     def load_partnet_object(self, urdf_path: str, scale: float = 1.0) -> sapien.Articulation:
         loader = self.scene.create_urdf_loader()
         loader.fix_root_link = True
-        loader.scale = scale  # 关键：设置缩放
+        loader.scale = scale  # Important: set scaling
         asset = loader.load_kinematic(urdf_path)
         if not asset:
             raise ValueError(f"Failed to load URDF from {urdf_path}")
         print(f"Loaded object: {urdf_path} (scale={scale})")
         return asset
-        
-    def generate_circular_trajectory(self, center: np.ndarray, radius: float, 
-                                   height: float, n_frames: int, 
-                                   full_rotation: bool = True) -> List[sapien.Pose]:
-        
-        poses = []
-        angle_step = (2 * np.pi if full_rotation else np.pi) / n_frames
-        
-        for i in range(n_frames):
-            angle = i * angle_step
-            
-            # Camera position
-            cam_pos = center + np.array([
-                radius * np.cos(angle),
-                radius * np.sin(angle),
-                height
-            ])
-            
-            # Look at center
-            forward = center - cam_pos
-            forward = forward / np.linalg.norm(forward)
-            
-            # Up vector
-            up = np.array([0, 0, 1])
-            
-            # Right vector  
-            right = np.cross(forward, up)
-            right = right / np.linalg.norm(right)
-            
-            # Recompute up to ensure orthogonality
-            up = np.cross(right, forward)
-            
-            # Create rotation matrix
-            rotation_matrix = np.column_stack([forward, -right, up])
-            
-            # Create transformation matrix
-            transform = np.eye(4)
-            transform[:3, :3] = rotation_matrix
-            transform[:3, 3] = cam_pos
-            
-            pose = sapien.Pose.from_transformation_matrix(transform)
-            poses.append(pose)
-            
-        return poses
-        
-    
-    
-    def generate_sphere_spiral_trajectory(self, center: np.ndarray, radius: float,
-                                         start_elevation: float, end_elevation: float,
-                                         rotations: float, n_frames: int) -> List[sapien.Pose]:
-        
-        poses = []
-        
-        # Convert elevation angles from degrees to radians
-        start_elev_rad = np.radians(start_elevation)
-        end_elev_rad = np.radians(end_elevation)
-        
-        for i in range(n_frames):
-            t = i / (n_frames - 1) if n_frames > 1 else 0  # 0 to 1
-            
-            # Interpolate elevation angle
-            elevation = start_elev_rad + t * (end_elev_rad - start_elev_rad)
-            
-            # Calculate azimuth angle (horizontal rotation)
-            azimuth = t * rotations * 2 * np.pi
-            
-            # Convert spherical coordinates to Cartesian
-            # elevation: angle from horizontal plane (0 = horizontal, π/2 = up, -π/2 = down)
-            # azimuth: angle around vertical axis
-            x = radius * np.cos(elevation) * np.cos(azimuth)
-            y = radius * np.cos(elevation) * np.sin(azimuth)
-            z = radius * np.sin(elevation)
-            
-            cam_pos = center + np.array([x, y, z])
-            
-            # Camera always looks at center
-            forward = center - cam_pos
-            forward = forward / np.linalg.norm(forward)
-            
-            # Calculate up vector (tangent to sphere surface, pointing generally upward)
-            # For a sphere, the up vector is perpendicular to the radial direction
-            radial = cam_pos - center
-            radial = radial / np.linalg.norm(radial)
-            
-            # Use world up as reference
-            world_up = np.array([0, 0, 1])
-            
-            # Calculate right vector
-            right = np.cross(forward, world_up)
-            if np.linalg.norm(right) < 1e-6:  # Handle singularity when looking straight up/down
-                # Use a different reference vector
-                right = np.cross(forward, np.array([1, 0, 0]))
-            right = right / np.linalg.norm(right)
-            
-            # Recompute up vector to ensure orthogonality
-            up = np.cross(right, forward)
-            up = up / np.linalg.norm(up)
-            
-            # Create rotation matrix (SAPIEN camera convention: X=forward, Y=left, Z=up)
-            rotation_matrix = np.column_stack([forward, -right, up])
-            
-            # Create transformation matrix
-            transform = np.eye(4)
-            transform[:3, :3] = rotation_matrix
-            transform[:3, 3] = cam_pos
-            
-            pose = sapien.Pose.from_transformation_matrix(transform)
-            poses.append(pose)
-            
-        return poses
         
     def capture_frame(self) -> Tuple[np.ndarray, np.ndarray, dict]:
         """
@@ -222,13 +111,13 @@ class PartNetVideoRenderer:
         position = self.camera.get_float_texture('Position')
         depth = -position[..., 2]  
         
-        # 用深度无效区域 (depth<=0) 作为背景掩码，填充背景颜色
+        # Use invalid depth areas (depth<=0) as background mask and fill with background color
         bg_mask = depth <= 0
         if np.any(bg_mask):
             bg_color_255 = (np.array(self._background_color) * 255).astype(np.uint8)
             rgb[bg_mask] = bg_color_255
         
-        # 获取相机外参
+        # Get camera extrinsic parameters
         model_matrix = self.camera.get_model_matrix()
         camera_pose = self.camera_mount.get_pose()
         camera_params = {
@@ -268,9 +157,6 @@ class PartNetVideoRenderer:
         depth_path = f"{output_dir}/{depth_video_name}"
         depth_writer = cv2.VideoWriter(depth_path, fourcc, self.fps, (self.width, self.height), True)  # isColor=True
         
-        # Import matplotlib for colormap
-        import matplotlib.cm as cm
-        
         # Normalize depth across all frames for consistent visualization (excluding zeros)
         all_valid_depths = []
         for d in self.depth_frames:
@@ -294,7 +180,7 @@ class PartNetVideoRenderer:
             colormap = cm.viridis
             depth_colored = colormap(depth_normalized)
             
-            # Set zero areas to background color (转换到0-1范围)
+            # Set zero areas to background color (convert to 0-1 range)
             bg = list(self._background_color) + [1]
             depth_colored[~mask] = bg
             
