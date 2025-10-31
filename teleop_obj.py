@@ -115,7 +115,7 @@ class TeleopObject:
     # rgb, depth, mask, obj pose, joint angle, cam pose, cam intr,+
     def save_logs(self):
         max_length = 300
-        interval = len(self.rgb_log) // max_length
+        interval = max(len(self.rgb_log) // max_length, 1)
         index = 0
         for i in range(0, len(self.rgb_log), interval):
             
