@@ -62,12 +62,12 @@ class PartNetVideoRenderer:
         
     def _setup_camera(self):
         """Setup camera with intrinsic parameters."""
-        near, far = 0.1, 100
+        near, far = 0.01, 100
         self.camera = self.scene.add_camera(
             name="camera",
             width=self.width,
             height=self.height,
-            fovy=np.deg2rad(35),
+            fovy=np.deg2rad(58),
             near=near,
             far=far,
         )
@@ -86,6 +86,7 @@ class PartNetVideoRenderer:
         loader.fix_root_link = True
         loader.scale = scale  # Important: set scaling
         asset = loader.load_kinematic(urdf_path)
+        self.asset = asset
         if not asset:
             raise ValueError(f"Failed to load URDF from {urdf_path}")
         print(f"Loaded object: {urdf_path} (scale={scale})")

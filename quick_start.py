@@ -89,7 +89,8 @@ def custom_animated_render(urdf_path: str, config: str = "high_quality",
     renderer.render_animated_sequence(
         poses,
         animations=custom_animations,
-        output_dir=output_dir
+        output_dir=output_dir,
+        save_frames=False,
     )
     
     # Create videos
