@@ -44,7 +44,9 @@ python quick_start.py /path/to/mobility.urdf \
 **!!! Start VR First.**
 
 ```bash
+cd vr/pico_streamer
 bash start_streaming_docker.sh
+cd ../..
 bash pipelines/vr_bridge.sh 
 ```
 
