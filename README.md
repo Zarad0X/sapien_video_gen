@@ -37,6 +37,23 @@ python quick_start.py /path/to/mobility.urdf \
   --speed 2
 ```
 
+## Teleop
+
+### Step1: In Real-Robo
+
+**!!! Start VR First.**
+
+```bash
+bash start_streaming_docker.sh
+bash pipelines/vr_bridge.sh 
+```
+
+### Step2: In this repo
+
+```bash
+urdf_path=... bash teleop.sh
+```
+
 ##  Features
 
 ###  Camera Trajectory Types
