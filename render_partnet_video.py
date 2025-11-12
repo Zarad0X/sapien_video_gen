@@ -134,93 +134,89 @@ class PartNetVideoRenderer:
             }
         }
         # Draw joint/link axes if an articulation/asset is loaded
-        try:
-            art = None
-            if hasattr(self, 'articulation') and self.articulation:
-                art = self.articulation
-            elif hasattr(self, 'asset') and self.asset:
-                art = self.asset
+        art = None
+        if hasattr(self, 'articulation') and self.articulation:
+            art = self.articulation
+        elif hasattr(self, 'asset') and self.asset:
+            art = self.asset
 
-            if art is not None:
-                # prepare camera rotation and translation (world -> camera)
-                cam_q = camera_pose.q  # w,x,y,z
-                cam_rot = R.from_quat(cam_q[[1, 2, 3, 0]])
-                cam_trans = np.array(camera_pose.p)
+        if art is not None:
+            # prepare camera rotation and translation (world -> camera)
+            cam_q = camera_pose.q  # w,x,y,z
+            cam_rot = R.from_quat(cam_q[[1, 2, 3, 0]])
+            cam_trans = np.array(camera_pose.p)
 
-                K = np.array(self.intrinsic_matrix)
+            K = np.array(self.intrinsic_matrix)
 
-                # iterate links if available, fallback to joints if not
-                links = []
-                if hasattr(art, 'get_links'):
-                    try:
-                        links = art.get_links()
-                    except Exception:
-                        links = []
+            # iterate links if available, fallback to joints if not
+            links = []
+            if hasattr(art, 'get_links'):
+                try:
+                    links = art.get_links()
+                except Exception:
+                    links = []
 
-                # If no links, try to use joints and draw at joint child link poses
-                if not links and hasattr(art, 'get_joints'):
-                    try:
-                        joints = art.get_joints()
-                        # some joints have .get_child_link() or .child_link; try to extract poses
-                        for j in joints:
-                            try:
-                                if hasattr(j, 'get_child_link'):
-                                    links.append(j.get_child_link())
-                                elif hasattr(j, 'child_link'):
-                                    links.append(j.child_link)
-                            except Exception:
-                                continue
-                    except Exception:
-                        links = []
-
-                for link in links:
-                    try:
-                        link_pose = link.get_pose()
-                    except Exception:
-                        # some link representations might store pose differently
-                        continue
-
-                    p_world = np.array(link_pose.p)
-                    # link rotation (local -> world)
-                    link_q = link_pose.q
-                    link_rot = R.from_quat(link_q[[1, 2, 3, 0]])
-
-                    origin = p_world
-                    axes_ends = [
-                        origin + link_rot.apply([self.joint_axis_length, 0.0, 0.0]),
-                        origin + link_rot.apply([0.0, self.joint_axis_length, 0.0]),
-                        origin + link_rot.apply([0.0, 0.0, self.joint_axis_length]),
-                    ]
-
-                    # project origin and endpoints into image
-                    def project_point(pw: np.ndarray):
-                        # point in camera coordinate: p_cam = R_cam_world.inv() * (Pw - cam_trans)
-                        p_cam = cam_rot.inv().apply(pw - cam_trans)
-                        # In SAPIEN camera coordinates forward is -Z (position[...,2] was negated for depth)
-                        z_cam = -p_cam[2]
-                        if z_cam <= 0:
-                            return None
-                        u = (K[0, 0] * p_cam[0] / -p_cam[2]) + K[0, 2]
-                        v = (K[1, 1] * p_cam[1] / -p_cam[2]) + K[1, 2]
-                        return int(round(u)), int(round(v))
-
-                    origin_px = project_point(origin)
-                    ends_px = [project_point(e) for e in axes_ends]
-
-                    if origin_px is None:
-                        continue
-
-                    # draw axes: X=red, Y=green, Z=blue
-                    colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]
-                    for end_px, color in zip(ends_px, colors):
-                        if end_px is None:
+            # If no links, try to use joints and draw at joint child link poses
+            if not links and hasattr(art, 'get_joints'):
+                try:
+                    joints = art.get_joints()
+                    # some joints have .get_child_link() or .child_link; try to extract poses
+                    for j in joints:
+                        try:
+                            if hasattr(j, 'get_child_link'):
+                                links.append(j.get_child_link())
+                            elif hasattr(j, 'child_link'):
+                                links.append(j.child_link)
+                        except Exception:
                             continue
-                        cv2.line(rgb, origin_px, end_px, color, thickness=2, lineType=cv2.LINE_AA)
-                    # small circle at origin
-                    cv2.circle(rgb, origin_px, radius=3, color=(255, 255, 255), thickness=-1)
-        except Exception:
-            # keep rendering even if axis overlay fails
-            pass
+                except Exception:
+                    links = []
+
+            for link in links:
+                try:
+                    link_pose = link.get_pose()
+                except Exception:
+                    # some link representations might store pose differently
+                    continue
+
+                p_world = np.array(link_pose.p)
+                # link rotation (local -> world)
+                link_q = link_pose.q
+                link_rot = R.from_quat(link_q[[1, 2, 3, 0]])
+
+                origin = p_world
+                axes_ends = [
+                    origin + link_rot.apply([self.joint_axis_length, 0.0, 0.0]),
+                    origin + link_rot.apply([0.0, self.joint_axis_length, 0.0]),
+                    origin + link_rot.apply([0.0, 0.0, self.joint_axis_length]),
+                ]
+
+                # project origin and endpoints into image
+                def project_point(pw: np.ndarray):
+                    # point in camera coordinate: p_cam = R_cam_world.inv() * (Pw - cam_trans)
+                    p_cam = cam_rot.inv().apply(pw - cam_trans)
+                    # In SAPIEN camera coordinates forward is -Z (position[...,2] was negated for depth)
+                    z_cam = -p_cam[2]
+                    if z_cam <= 0:
+                        return None
+                    u = (K[0, 0] * p_cam[0] / -p_cam[2]) + K[0, 2]
+                    v = (K[1, 1] * p_cam[1] / -p_cam[2]) + K[1, 2]
+                    return int(round(u)), int(round(v))
+
+                origin_px = project_point(origin)
+                ends_px = [project_point(e) for e in axes_ends]
+
+                if origin_px is None:
+                    continue
+
+                # draw axes: X=red, Y=green, Z=blue
+                colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]
+                for end_px, color in zip(ends_px, colors):
+                    if end_px is None:
+                        continue
+                    cv2.line(rgb, origin_px, end_px, color, thickness=2, lineType=cv2.LINE_AA)
+                # small circle at origin
+                cv2.circle(rgb, origin_px, radius=3, color=(255, 255, 255), thickness=-1)
 
         return rgb, depth, camera_params
         
